@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Monitor Layout
+GenericName=Display Configuration
+Comment=Arrange displays and configure their modes, refresh rates, and scaling
+Exec=@PLUGIN_DIR@/launch.sh
+Icon=omarchy-monitor-layout
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=monitor;display;screen;resolution;refresh;scale;hyprland;omarchy;
+StartupNotify=true
+StartupWMClass=org.omarchy.MonitorLayout
+DBusActivatable=false

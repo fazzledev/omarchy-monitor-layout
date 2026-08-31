@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.cjgarcia1229.monitor-layout",
+  "name": "Monitor Layout",
+  "version": "1.0.0",
+  "author": "Caleb Garcia",
+  "license": "MIT",
+  "description": "Drag displays into place and safely persist the layout to Omarchy's Hyprland configuration.",
+  "kinds": ["panel"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "panel": "Launcher.qml"
+  }
+}
