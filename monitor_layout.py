@@ -202,7 +202,8 @@ def valid_layout_entry(entry) -> bool:
     if not isinstance(entry, dict) or not isinstance(entry.get("description"), str):
         return False
     numbers = [entry.get(field) for field in LAYOUT_FIELDS]
-    if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in numbers):
+    if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+               for value in numbers):
         return False
     return entry["scale"] > 0 and entry["transform"] in range(8)
 
