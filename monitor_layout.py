@@ -658,14 +658,17 @@ class MonitorWindow(Gtk.ApplicationWindow):
         if not matched:
             self.status.set_label(f'None of the connected displays are in "{name}".')
             return
-        self.normalize()
         self.layout_name.set_text(name)
+        try:
+            self.apply_live()
+            outcome = "Save layout to keep it after logout."
+        except Exception as exc:
+            outcome = f"Applying it failed: {exc}"
         self.canvas.queue_draw()
         self.selection_changed(self.monitors[self.canvas.selected])
         kept_modes = f' Kept the current mode on {", ".join(missing_modes)}.' if missing_modes else ""
         self.status.set_label(
-            f'Loaded "{name}" for {matched} of {len(self.monitors)} displays.{kept_modes} '
-            "Preview or save to apply it."
+            f'Switched to "{name}" for {matched} of {len(self.monitors)} displays.{kept_modes} {outcome}'
         )
 
     def delete_layout(self, _button):
@@ -783,14 +786,17 @@ class MonitorWindow(Gtk.ApplicationWindow):
             monitor["x"] -= min_x
             monitor["y"] -= min_y
 
+    def apply_live(self):
+        self.normalize()
+        for monitor in self.monitors:
+            result = run("hyprctl", "eval", monitor_rule(monitor), check=False)
+            if result.returncode or result.stdout.strip() != "ok":
+                detail = (result.stdout or result.stderr).strip() or f"exit status {result.returncode}"
+                raise RuntimeError(f'{monitor["name"]}: {detail}')
+
     def preview(self, _button):
         try:
-            self.normalize()
-            for monitor in self.monitors:
-                result = run("hyprctl", "eval", monitor_rule(monitor), check=False)
-                if result.returncode or result.stdout.strip() != "ok":
-                    detail = (result.stdout or result.stderr).strip() or f"exit status {result.returncode}"
-                    raise RuntimeError(f'{monitor["name"]}: {detail}')
+            self.apply_live()
             self.status.set_label("Preview applied. Save to keep it after logout.")
             self.canvas.queue_draw()
             self.selection_changed(self.monitors[self.canvas.selected])

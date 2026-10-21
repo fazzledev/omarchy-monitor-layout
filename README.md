@@ -61,8 +61,8 @@ To also register **Monitor Layout** in the desktop application launcher:
 
 Type a name and click **Save as** to keep the current arrangement, for example
 "Desk" and "Presenting". Saving under an existing name updates it. Pick a layout
-and click **Load** to put it back on the canvas, then **Preview** or
-**Save layout** to apply it. Layouts match displays by description, so displays
+and click **Load** to switch your displays to it right away, then
+**Save layout** to keep it after logout. Layouts match displays by description, so displays
 that are not connected are skipped and a display missing from the layout keeps
 its current placement. A saved mode and scale are restored only if the display
 still offers that mode. Identical displays that share a description are told
