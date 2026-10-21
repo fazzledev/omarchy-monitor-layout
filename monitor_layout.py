@@ -787,11 +787,10 @@ class MonitorWindow(Gtk.ApplicationWindow):
         try:
             self.normalize()
             for monitor in self.monitors:
-                refresh = f'{monitor["refreshRate"]:.3f}'.rstrip("0").rstrip(".")
-                rule = f'{monitor["name"]},{monitor["width"]}x{monitor["height"]}@{refresh},{monitor["x"]}x{monitor["y"]},{monitor["scale"]:g}'
-                if monitor["transform"]:
-                    rule += f',transform,{monitor["transform"]}'
-                run("hyprctl", "keyword", "monitor", rule)
+                result = run("hyprctl", "eval", monitor_rule(monitor), check=False)
+                if result.returncode or result.stdout.strip() != "ok":
+                    detail = (result.stdout or result.stderr).strip() or f"exit status {result.returncode}"
+                    raise RuntimeError(f'{monitor["name"]}: {detail}')
             self.status.set_label("Preview applied. Save to keep it after logout.")
             self.canvas.queue_draw()
             self.selection_changed(self.monitors[self.canvas.selected])
