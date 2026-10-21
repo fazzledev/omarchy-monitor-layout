@@ -661,14 +661,14 @@ class MonitorWindow(Gtk.ApplicationWindow):
         self.layout_name.set_text(name)
         try:
             self.apply_live()
-            outcome = "Save layout to keep it after logout."
+            verb, outcome = "Switched to", "Save layout to keep it after logout."
         except Exception as exc:
-            outcome = f"Applying it failed: {exc}"
+            verb, outcome = "Loaded", f"Applying it failed: {exc}"
         self.canvas.queue_draw()
         self.selection_changed(self.monitors[self.canvas.selected])
         kept_modes = f' Kept the current mode on {", ".join(missing_modes)}.' if missing_modes else ""
         self.status.set_label(
-            f'Switched to "{name}" for {matched} of {len(self.monitors)} displays.{kept_modes} {outcome}'
+            f'{verb} "{name}" for {matched} of {len(self.monitors)} displays.{kept_modes} {outcome}'
         )
 
     def delete_layout(self, _button):
