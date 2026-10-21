@@ -64,8 +64,10 @@ Type a name and click **Save as** to keep the current arrangement, for example
 and click **Load** to put it back on the canvas, then **Preview** or
 **Save layout** to apply it. Layouts match displays by description, so displays
 that are not connected are skipped and a display missing from the layout keeps
-its current placement. A saved mode is restored only if the display still
-offers it.
+its current placement. A saved mode and scale are restored only if the display
+still offers that mode. Identical displays that share a description are told
+apart by connector name, as `monitors.lua` does. If the layouts file cannot be
+read, the editor leaves it untouched and asks you to fix or remove it.
 
 The canvas uses Hyprland's logical dimensions for correct pointer transitions.
 Each card separately shows its physical signal mode and scaled logical size.

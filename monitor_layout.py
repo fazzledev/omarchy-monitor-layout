@@ -167,13 +167,19 @@ def monitor_rule(monitor: dict) -> str:
     return "hl.monitor({ " + ", ".join(parts) + " })"
 
 
+class LayoutsFileError(RuntimeError):
+    pass
+
+
 def load_layouts() -> dict[str, list[dict]]:
+    if not LAYOUTS.exists():
+        return {}
     try:
         layouts = json.loads(LAYOUTS.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LayoutsFileError(f"{LAYOUTS} is unreadable; fix or remove it ({exc}).") from exc
     if not isinstance(layouts, dict):
-        return {}
+        raise LayoutsFileError(f"{LAYOUTS} is not a layouts file; fix or remove it.")
     return {name: layout for name, layout in layouts.items() if isinstance(layout, list)}
 
 
@@ -186,38 +192,54 @@ def write_layouts(layouts: dict[str, list[dict]]) -> None:
 
 def layout_snapshot(monitors: list[dict]) -> list[dict]:
     return [
-        {"description": monitor["description"], **{field: monitor[field] for field in LAYOUT_FIELDS}}
+        {"description": monitor["description"], "name": monitor["name"],
+         **{field: monitor[field] for field in LAYOUT_FIELDS}}
         for monitor in monitors
     ]
 
 
-def apply_layout(monitors: list[dict], layout: list[dict]) -> int:
-    saved: dict[str, list[dict]] = {}
-    for entry in layout:
-        if isinstance(entry, dict) and entry.get("description"):
-            saved.setdefault(entry["description"], []).append(entry)
+def valid_layout_entry(entry) -> bool:
+    if not isinstance(entry, dict) or not isinstance(entry.get("description"), str):
+        return False
+    numbers = [entry.get(field) for field in LAYOUT_FIELDS]
+    if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in numbers):
+        return False
+    return entry["scale"] > 0 and entry["transform"] in range(8)
 
+
+def apply_layout(monitors: list[dict], layout: list[dict]) -> tuple[int, list[str]]:
+    entries = [entry for entry in layout if valid_layout_entry(entry)]
+    descriptions = [monitor["description"] for monitor in monitors] + [entry["description"] for entry in entries]
+
+    def key(item):
+        if descriptions.count(item["description"]) > 2:
+            return item["description"], item.get("name")
+        return item["description"], None
+
+    saved = {key(entry): entry for entry in entries}
     matched = 0
+    missing_modes = []
     for monitor in monitors:
-        entries = saved.get(monitor["description"])
-        if not entries:
+        entry = saved.get(key(monitor))
+        if entry is None:
             continue
-        entry = entries.pop(0)
         matched += 1
-        monitor["x"] = int(entry.get("x", monitor["x"]))
-        monitor["y"] = int(entry.get("y", monitor["y"]))
-        monitor["scale"] = float(entry.get("scale", monitor["scale"]))
-        monitor["transform"] = int(entry.get("transform", monitor["transform"]))
+        monitor["x"] = int(entry["x"])
+        monitor["y"] = int(entry["y"])
+        monitor["transform"] = int(entry["transform"])
         mode = next((
             mode for mode in monitor.get("availableModes", [])
-            if mode["width"] == entry.get("width") and mode["height"] == entry.get("height")
-            and abs(mode["refreshRate"] - float(entry.get("refreshRate", 0))) < 0.01
+            if mode["width"] == entry["width"] and mode["height"] == entry["height"]
+            and abs(mode["refreshRate"] - entry["refreshRate"]) < 0.01
         ), None)
-        if mode:
-            monitor["width"] = mode["width"]
-            monitor["height"] = mode["height"]
-            monitor["refreshRate"] = mode["refreshRate"]
-    return matched
+        if mode is None:
+            missing_modes.append(monitor["name"])
+            continue
+        monitor["width"] = mode["width"]
+        monitor["height"] = mode["height"]
+        monitor["refreshRate"] = mode["refreshRate"]
+        monitor["scale"] = float(entry["scale"])
+    return matched, missing_modes
 
 
 class LayoutCanvas(Gtk.DrawingArea):
@@ -561,7 +583,6 @@ class MonitorWindow(Gtk.ApplicationWindow):
         save_as = Gtk.Button(label="Save as")
         save_as.connect("clicked", self.save_layout_as)
         layouts.append(save_as)
-        self.refresh_layouts()
 
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         actions.add_css_class("action-strip")
@@ -586,9 +607,14 @@ class MonitorWindow(Gtk.ApplicationWindow):
         self.status.set_xalign(0)
         outer.append(self.status)
         self.selection_changed(self.monitors[0])
+        self.refresh_layouts()
 
     def refresh_layouts(self, selected_name=None):
-        self.layouts = load_layouts()
+        try:
+            self.layouts = load_layouts()
+        except LayoutsFileError as exc:
+            self.layouts = {}
+            self.status.set_label(str(exc))
         self.layout_names = sorted(self.layouts, key=str.casefold)
         self.layout_dropdown.set_model(Gtk.StringList.new(self.layout_names))
         if self.layout_names:
@@ -616,7 +642,7 @@ class MonitorWindow(Gtk.ApplicationWindow):
             existed = name in layouts
             layouts[name] = layout_snapshot(self.monitors)
             write_layouts(layouts)
-        except OSError as exc:
+        except (OSError, LayoutsFileError) as exc:
             self.status.set_label(f"Could not save layout: {exc}")
             return
         self.refresh_layouts(name)
@@ -627,7 +653,7 @@ class MonitorWindow(Gtk.ApplicationWindow):
         name = self.selected_layout_name()
         if name is None:
             return
-        matched = apply_layout(self.monitors, self.layouts[name])
+        matched, missing_modes = apply_layout(self.monitors, self.layouts[name])
         if not matched:
             self.status.set_label(f'None of the connected displays are in "{name}".')
             return
@@ -635,8 +661,9 @@ class MonitorWindow(Gtk.ApplicationWindow):
         self.layout_name.set_text(name)
         self.canvas.queue_draw()
         self.selection_changed(self.monitors[self.canvas.selected])
+        kept_modes = f' Kept the current mode on {", ".join(missing_modes)}.' if missing_modes else ""
         self.status.set_label(
-            f'Loaded "{name}" for {matched} of {len(self.monitors)} displays. '
+            f'Loaded "{name}" for {matched} of {len(self.monitors)} displays.{kept_modes} '
             "Preview or save to apply it."
         )
 
@@ -648,7 +675,7 @@ class MonitorWindow(Gtk.ApplicationWindow):
             layouts = load_layouts()
             layouts.pop(name, None)
             write_layouts(layouts)
-        except OSError as exc:
+        except (OSError, LayoutsFileError) as exc:
             self.status.set_label(f"Could not delete layout: {exc}")
             return
         self.refresh_layouts()
