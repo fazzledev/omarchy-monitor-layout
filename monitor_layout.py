@@ -788,11 +788,10 @@ class MonitorWindow(Gtk.ApplicationWindow):
 
     def apply_live(self):
         self.normalize()
-        for monitor in self.monitors:
-            result = run("hyprctl", "eval", monitor_rule(monitor), check=False)
-            if result.returncode or result.stdout.strip() != "ok":
-                detail = (result.stdout or result.stderr).strip() or f"exit status {result.returncode}"
-                raise RuntimeError(f'{monitor["name"]}: {detail}')
+        rules = "\n".join(monitor_rule(monitor) for monitor in self.monitors)
+        result = run("hyprctl", "eval", rules, check=False)
+        if result.returncode or result.stdout.strip() != "ok":
+            raise RuntimeError((result.stdout or result.stderr).strip() or f"exit status {result.returncode}")
 
     def preview(self, _button):
         try:
